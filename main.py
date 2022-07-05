@@ -15,6 +15,8 @@ logging.basicConfig(
 
 CHAT_ID = os.getenv("CHAT_ID")
 TOKEN = os.getenv("TOKEN")
+PORT = int(os.getenv("PORT"))
+APP_NAME = os.getenv("HEROKU_APP_NAME")
 
 
 def requestUrl(url):
@@ -98,7 +100,8 @@ def main() -> None:
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('stop', stop))
-    app.run_polling()
+    #app.run_polling()
+    app.run_webhook(listen='0.0.0.0', port=PORT, url_path=TOKEN, webhook_url=f"https://{APP_NAME}.herokuapp.com/{TOKEN}")
 
 
 if __name__ == '__main__':
