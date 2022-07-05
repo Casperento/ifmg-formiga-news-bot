@@ -1,11 +1,8 @@
 # Bot que envia mensagens com newsletter do IFMG Campus Formiga formatado.
-import html
 import io
-import json
 import os
 import logging
 import traceback
-
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
@@ -19,7 +16,6 @@ logging.basicConfig(
 
 CHAT_ID = os.getenv("CHAT_ID")
 TOKEN = os.getenv("TOKEN")
-PORT = int(os.getenv("PORT"))
 APP_NAME = os.getenv("HEROKU_APP_NAME")
 MODE = os.getenv("MODE")
 DEVELOPER_CHAT_ID = os.getenv("DEV_CHAT_ID")
@@ -112,7 +108,7 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    interval = 1200  # em segundos
+    interval = 120  # em segundos
     if MODE == 'dev':
         interval = 20
 
@@ -140,11 +136,7 @@ def main() -> None:
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('stop', stop))
     app.add_error_handler(error)
-    if MODE == 'dev':
-        app.run_polling()
-    else:
-        app.run_webhook(listen='0.0.0.0', port=PORT, url_path=TOKEN,
-                        webhook_url=f"https://{APP_NAME}.herokuapp.com/{TOKEN}")
+    app.run_polling()
 
 
 if __name__ == '__main__':
