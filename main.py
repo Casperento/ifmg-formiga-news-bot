@@ -69,14 +69,19 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
         fp = open('news_cached.tmp', 'r+')
         content = fp.read()
         if len(content) != 0:
-            cached = eval(content)
+            cached = [line for line in content.split('\n') if len(line) != 0]
             new_links = [x for x in items_links if x not in cached]
-            cache = cached + new_links
-        fp.write(str(cache))
+            cache = new_links
+
+        for c in cache:
+            fp.write(f"{c}\n")
+
         fp.close()
 
         if MODE == 'dev':
-            await send_debug_message(context, f"content:{content}\nitems_links:{len(items_links)}\nnews_links:{len(new_links)}\ncache:{len(cache)}")
+            count_links = content.count('\n')
+            await send_debug_message(context, f"content:{count_links}\nitems_links:{len(items_links)}"
+                                              f"\nnews_links:{len(new_links)}\ncache:{len(cache)}")
 
         f_items = list(filter(lambda x: x.find('link').text in new_links, items))
         for node in f_items:
@@ -109,7 +114,7 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     interval = 1200  # em segundos
     if MODE == 'dev':
-        interval = 30
+        interval = 20
 
     logging.info(f"Configurando job_queue para enviar mensagens a cada {interval} segundos...")
     context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID, name=str(CHAT_ID))
@@ -124,8 +129,12 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def main() -> None:
-    f = open('news_cached.tmp', 'x')
-    f.close()
+    try:
+        f = open('news_cached.tmp', 'x')
+        f.close()
+    except FileExistsError as e:
+        if MODE == 'dev':
+            logging.debug("Arquivo de cache ja existe...")
 
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
