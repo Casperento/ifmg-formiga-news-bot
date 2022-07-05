@@ -13,8 +13,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-CHAT_ID = "---"
-TOKEN = "---"
+CHAT_ID = os.getenv("CHAT_ID")
+TOKEN = os.getenv("TOKEN")
 
 
 def requestUrl(url):
