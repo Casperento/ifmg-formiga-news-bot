@@ -45,9 +45,11 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
         new_links = items_links
         cached_file_name = 'news_cached.tmp'
         if os.path.exists(cached_file_name):
-            fp = open(cached_file_name, 'r')
+            fp = open(cached_file_name, 'r+')
             cached = eval(fp.read())
             new_links = [x for x in items_links if x not in cached]
+            cache = new_links + cached
+            fp.write(str(cache))
             fp.close()
         else:
             fp = open(cached_file_name, 'w')
@@ -79,7 +81,7 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    interval = 12*3600  # em segundos
+    interval = 1200  # em segundos
     logging.info(f"Configurando job_queue para enviar mensagens a cada {interval} segundos...")
     context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID, name=str(CHAT_ID))
     await update.message.reply_text("Bot inicializado!")
