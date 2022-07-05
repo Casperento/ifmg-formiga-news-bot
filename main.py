@@ -79,7 +79,7 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    interval = 10  # em segundos
+    interval = 12*3600  # em segundos
     logging.info(f"Configurando job_queue para enviar mensagens a cada {interval} segundos...")
     context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID, name=str(CHAT_ID))
 
