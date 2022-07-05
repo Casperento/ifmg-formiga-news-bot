@@ -1,10 +1,10 @@
 # Bot que envia mensagens com newsletter do IFMG Campus Formiga formatado.
 import io
 import os
-import json
 import logging
 import requests
 import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -32,53 +32,54 @@ def requestUrl(url):
 
 
 async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
-    logging.info(f"Adquirindo XML de \"https://formiga.ifmg.edu.br/?format=feed&type=rss\"...")
     url = "https://formiga.ifmg.edu.br/?format=feed&type=rss"
+    logging.info(f"Adquirindo XML de \"{url}\"...")
     req = requestUrl(url)
     if req is not None:
         logging.info("Analisando XML adquirido...")
 
         tree = ET.parse(io.BytesIO(req.content))
         root = tree.getroot()
+        items = list(reversed([i for i in root.iter('item')]))
+        items_links = [x.find('link').text for x in items]
+        new_links = items_links
+        cached_file_name = 'news_cached.tmp'
+        if os.path.exists(cached_file_name):
+            fp = open(cached_file_name, 'r')
+            cached = eval(fp.read())
+            new_links = [x for x in items_links if x not in cached]
+            fp.close()
+        else:
+            fp = open(cached_file_name, 'w')
+            fp.write(str(new_links))
+            fp.close()
 
-        items = list()
-        # cached_file_name = 'news_cached.json'
-        # if os.path.exists(cached_file_name):
-        #     fp = open(cached_file_name, 'r')
-        #     items = json.load(fp)
-        #     items = [x for x in items.values()]
-        #     fp.close()
-        #
-        # fp = open(cached_file_name, 'w+')
+        f_items = list(filter(lambda x: x.find('link').text in new_links, items))
+        for node in f_items:
+            title = str()
+            description = str()
+            link = str()
+            for elem in node.iter():
+                if not elem.tag == node.tag:
+                    if elem.tag == 'title':
+                        title = elem.text
+                    elif elem.tag == 'description':
+                        description = elem.text.replace('\n', '')
+                        soup = BeautifulSoup(description, 'html.parser')
+                        description = soup.find_all('p')[1].text
+                    elif elem.tag == 'link':
+                        link = elem.text
 
-        rev = [i for i in root.iter('item') if not (i in items)]
-        items = reversed(rev)
+            await context.bot.send_message(CHAT_ID, f"[{title}]({link})\n\nResumo:\n\n{description}",
+                                           parse_mode='Markdown')
 
-        # rev_vals = dict()
-        # for v in range(len(rev)):
-        #     rev_vals[v] = rev[v]
-        #
-        # for k, v in rev_vals.items():
-        #     items[k] = v
-        #
-        # json.dump(items, fp)
-        # fp.close()
-        # items = rev_vals.values()
-
-        for item in items:
-            title = f"{item.find('title').text}"
-            link = f"{item.find('link').text}"
-            description = item.find('description').text.replace('\n','')
-            print('dd:', description)
-
-            #await context.bot.send_message(CHAT_ID, f"[{title}]({link})", parse_mode='Markdown')
         logging.info("Noticias mais recentes enviadas para o canal com sucesso!")
     else:
         logging.error(f"Algo deu errado ao requisitar a url \"{url}\"")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    interval = 30  # em segundos
+    interval = 10  # em segundos
     logging.info(f"Configurando job_queue para enviar mensagens a cada {interval} segundos...")
     context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID, name=str(CHAT_ID))
 
