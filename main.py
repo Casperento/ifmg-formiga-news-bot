@@ -1,14 +1,18 @@
 # Bot que envia mensagens com newsletter do IFMG Campus Formiga formatado.
+import html
 import io
+import json
 import os
 import logging
+import traceback
+
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Enable logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -17,6 +21,8 @@ CHAT_ID = os.getenv("CHAT_ID")
 TOKEN = os.getenv("TOKEN")
 PORT = int(os.getenv("PORT"))
 APP_NAME = os.getenv("HEROKU_APP_NAME")
+MODE = os.getenv("MODE")
+DEVELOPER_CHAT_ID = os.getenv("DEV_CHAT_ID")
 
 
 def requestUrl(url):
@@ -33,30 +39,44 @@ def requestUrl(url):
         req.close()
 
 
+async def error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
+    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+    tb_string = "".join(tb_list)
+    logging.error(tb_string)
+
+
+async def send_debug_message(context: ContextTypes.DEFAULT_TYPE, message):
+    await context.bot.send_message(
+        chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML
+    )
+
+
 async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
     url = "https://formiga.ifmg.edu.br/?format=feed&type=rss"
     logging.info(f"Adquirindo XML de \"{url}\"...")
     req = requestUrl(url)
     if req is not None:
         logging.info("Analisando XML adquirido...")
-
         tree = ET.parse(io.BytesIO(req.content))
         root = tree.getroot()
+
         items = list(reversed([i for i in root.iter('item')]))
         items_links = [x.find('link').text for x in items]
         new_links = items_links
-        cached_file_name = 'news_cached.tmp'
-        if os.path.exists(cached_file_name):
-            fp = open(cached_file_name, 'r+')
-            cached = eval(fp.read())
+        cache = new_links
+
+        fp = open('news_cached.tmp', 'r+')
+        content = fp.read()
+        if len(content) != 0:
+            cached = eval(content)
             new_links = [x for x in items_links if x not in cached]
-            cache = new_links + cached
-            fp.write(str(cache))
-            fp.close()
-        else:
-            fp = open(cached_file_name, 'w')
-            fp.write(str(new_links))
-            fp.close()
+            cache = cached + new_links
+        fp.write(str(cache))
+        fp.close()
+
+        if MODE == 'dev':
+            await send_debug_message(context, f"content:{content}\nitems_links:{len(items_links)}\nnews_links:{len(new_links)}\ncache:{len(cache)}")
 
         f_items = list(filter(lambda x: x.find('link').text in new_links, items))
         for node in f_items:
@@ -74,8 +94,12 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
                     elif elem.tag == 'link':
                         link = elem.text
 
-            await context.bot.send_message(CHAT_ID, f"[{title}]({link})\n\nResumo:\n\n{description}",
-                                           parse_mode='Markdown')
+            if MODE == 'dev':
+                await context.bot.send_message(DEVELOPER_CHAT_ID, f"[{title}]({link})\n\nResumo:\n\n{description}",
+                                               parse_mode=ParseMode.MARKDOWN)
+            else:
+                await context.bot.send_message(CHAT_ID, f"[{title}]({link})\n\nResumo:\n\n{description}",
+                                               parse_mode=ParseMode.MARKDOWN)
 
         logging.info("Noticias mais recentes enviadas para o canal com sucesso!")
     else:
@@ -84,6 +108,9 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     interval = 1200  # em segundos
+    if MODE == 'dev':
+        interval = 30
+
     logging.info(f"Configurando job_queue para enviar mensagens a cada {interval} segundos...")
     context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID, name=str(CHAT_ID))
     await update.message.reply_text("Bot inicializado!")
@@ -97,11 +124,18 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def main() -> None:
+    f = open('news_cached.tmp', 'x')
+    f.close()
+
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('stop', stop))
-    #app.run_polling()
-    app.run_webhook(listen='0.0.0.0', port=PORT, url_path=TOKEN, webhook_url=f"https://{APP_NAME}.herokuapp.com/{TOKEN}")
+    app.add_error_handler(error)
+    if MODE == 'dev':
+        app.run_polling()
+    else:
+        app.run_webhook(listen='0.0.0.0', port=PORT, url_path=TOKEN,
+                        webhook_url=f"https://{APP_NAME}.herokuapp.com/{TOKEN}")
 
 
 if __name__ == '__main__':
