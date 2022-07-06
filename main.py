@@ -108,7 +108,7 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    interval = 120  # em segundos
+    interval = 1200  # em segundos
     if MODE == 'dev':
         interval = 20
 
