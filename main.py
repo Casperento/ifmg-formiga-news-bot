@@ -16,12 +16,11 @@ logging.basicConfig(
 
 CHAT_ID = os.getenv("CHAT_ID")
 TOKEN = os.getenv("TOKEN")
-APP_NAME = os.getenv("HEROKU_APP_NAME")
 MODE = os.getenv("MODE")
-DEVELOPER_CHAT_ID = os.getenv("DEV_CHAT_ID")
+DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 
 
-def requestUrl(url):
+def requestUrl(url) -> requests.Response:
     try:
         req = requests.get(url)
         if req.status_code != 200:
