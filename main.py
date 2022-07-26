@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -16,7 +16,6 @@ logging.basicConfig(
 
 CHAT_ID = os.getenv("CHAT_ID")
 TOKEN = os.getenv("TOKEN")
-MODE = os.getenv("MODE")
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 
 
@@ -30,8 +29,6 @@ def requestUrl(url) -> requests.Response:
         return None
     else:
         return req
-    finally:
-        req.close()
 
 
 async def error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -41,7 +38,7 @@ async def error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.error(tb_string)
 
 
-async def send_debug_message(context: ContextTypes.DEFAULT_TYPE, message):
+async def send_debug_message(context: ContextTypes.DEFAULT_TYPE, message) -> None:
     await context.bot.send_message(
         chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML
     )
@@ -57,26 +54,11 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
         root = tree.getroot()
 
         items = list(reversed([i for i in root.iter('item')]))
-        items_links = [x.find('link').text for x in items]
-        new_links = items_links
-        cache = new_links
+        items_dates = [x.find('pubDate').text for x in items]
+        new_links = [x.find('link').text for x in items]
 
-        fp = open('news_cached.tmp', 'r+')
-        content = fp.read()
-        if len(content) != 0:
-            cached = [line for line in content.split('\n') if len(line) != 0]
-            new_links = [x for x in items_links if x not in cached]
-            cache = new_links
-
-        for c in cache:
-            fp.write(f"{c}\n")
-
-        fp.close()
-
-        if MODE == 'dev':
-            count_links = content.count('\n')
-            await send_debug_message(context, f"content:{count_links}\nitems_links:{len(items_links)}"
-                                              f"\nnews_links:{len(new_links)}\ncache:{len(cache)}")
+        if DEVELOPER_CHAT_ID != '-1':
+            await send_debug_message(context, f"items_dates:{len(items_dates)}\nnews_links:{len(new_links)}")
 
         f_items = list(filter(lambda x: x.find('link').text in new_links, items))
         for node in f_items:
@@ -94,7 +76,7 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
                     elif elem.tag == 'link':
                         link = elem.text
 
-            if MODE == 'dev':
+            if DEVELOPER_CHAT_ID != '-1':
                 await context.bot.send_message(DEVELOPER_CHAT_ID, f"[{title}]({link})\n\nResumo:\n\n{description}",
                                                parse_mode=ParseMode.MARKDOWN)
             else:
@@ -108,32 +90,50 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     interval = 1200  # em segundos
-    if MODE == 'dev':
+    if DEVELOPER_CHAT_ID != '-1':
         interval = 20
 
-    logging.info(f"Configurando job_queue para enviar mensagens a cada {interval} segundos...")
-    context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID, name=str(CHAT_ID))
+    context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID,
+                                    name=f'<JOB> Chat ID: {CHAT_ID} | '
+                                         f'Developer Chat ID: {DEVELOPER_CHAT_ID} | '
+                                         f'Interval (secs): {interval}'
+                                    )
     await update.message.reply_text("Bot inicializado!")
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     current_jobs = context.job_queue.get_jobs_by_name(CHAT_ID)
+
+    if DEVELOPER_CHAT_ID != '-1':
+        current_jobs = context.job_queue.get_jobs_by_name(DEVELOPER_CHAT_ID)
+
     for job in current_jobs:
         job.schedule_removal()
+
     logging.info("job do envio de mensagens encerrado...")
 
+    await update.message.reply_text("Bot encerrado.")
+
+
+async def forwarder(update, context) -> None:
+    msg = update.channel_post
+    if msg:
+        logging.info(msg)
+
+
+# TODO: tratar datas no formato '%a, %d %b %Y %H:%M:%S %z'
+# TODO: verificar data da mensagem mais recente e comparar com as mais novas (adquiridas via XML)
 
 def main() -> None:
-    try:
-        f = open('news_cached.tmp', 'x')
-        f.close()
-    except FileExistsError as e:
-        if MODE == 'dev':
-            logging.debug("Arquivo de cache ja existe...")
+    logging.info(f'Getting environment vars...')
+    logging.info(f'CHAT_ID: {CHAT_ID}')
+    logging.info(f'DEVELOPER_CHAT_ID: {DEVELOPER_CHAT_ID}')
+    logging.info(f'TOKEN: {TOKEN}')
 
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('stop', stop))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), forwarder))
     app.add_error_handler(error)
     app.run_polling()
 
