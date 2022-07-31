@@ -24,9 +24,9 @@ PS C:\Windows\system32> $env:CHAT_ID="ID-CANAL-DESEJADO"
 PS C:\Windows\system32> $env:DEVELOPER_CHAT_ID="ID-CHAT-DO-PERFIL-DEV"
 ```
 
-Obs. 1: caso a variável `DEVELOPER\_CHAT\_ID` receba o valor -1, então as notícias serão enviadas para o chat de ID `CHAT\_ID`.
+Obs. 1: caso a variável `DEVELOPER_CHAT_ID` receba o valor -1, então as notícias serão enviadas para o chat de ID `CHAT_ID`.
 
-Obs. 2: o arquivo `last\_message\_pubDate.txt` sempre contém o _pubDate_ da mensagem mais recente do XML do RSS.
+Obs. 2: o arquivo `last_message_pubDate.txt` sempre contém o _pubDate_ da mensagem mais recente do XML do RSS.
 
 - Executando o bot:
 

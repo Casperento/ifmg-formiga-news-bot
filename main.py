@@ -90,11 +90,13 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.send_message(CHAT_ID, f"[{title}]({link})\n\nResumo:\n\n{description}",
                                                parse_mode=ParseMode.MARKDOWN)
 
-        logging.info("Noticias mais recentes enviadas para o canal com sucesso!")
         if len(new_links) > 0:
             fp = open('last_message_pubDate.txt', 'w')
             fp.write(items[-1].find('pubDate').text)
             fp.close()
+            logging.info(f"Foram identificadas {len(new_links)} noticias novas...")
+
+        logging.info("Noticias mais recentes enviadas para o canal com sucesso!")
     else:
         logging.error(f"Algo deu errado ao requisitar a url \"{url}\"")
 
@@ -103,6 +105,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     interval = 1200  # em segundos
     if DEVELOPER_CHAT_ID != '-1':
         interval = 20
+
+    context.job_queue.run_once(coroutine, 20, chat_id=CHAT_ID,
+                               name=f'<JOB-ONCE> Chat ID: {CHAT_ID} | '
+                                    f'Developer Chat ID: {DEVELOPER_CHAT_ID} | '
+                                    f'Interval (secs): 20'
+                              )
 
     context.job_queue.run_repeating(coroutine, interval, chat_id=CHAT_ID,
                                     name=f'<JOB> Chat ID: {CHAT_ID} | '
@@ -127,10 +135,14 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def main() -> None:
-    logging.info(f'Getting environment vars...')
+    logging.info(f'Consultando variaveis de ambiente...')
     logging.info(f'CHAT_ID: {CHAT_ID}')
     logging.info(f'DEVELOPER_CHAT_ID: {DEVELOPER_CHAT_ID}')
     logging.info(f'TOKEN: {TOKEN}')
+
+    if CHAT_ID == None or DEVELOPER_CHAT_ID == None or TOKEN == None:
+        logging.error('Variaveis de ambiente nao configuradas...')
+        return
 
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
