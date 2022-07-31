@@ -13,7 +13,6 @@ Configurando as variáveis de ambiente com _bash_:
 $ export TOKEN="TOKEN-BOT-FATHER"
 $ export CHAT_ID="ID-CANAL-DESEJADO"
 $ export DEVELOPER_CHAT_ID="ID-CHAT-DO-PERFIL-DEV"
-$ export MODE="MODO-DE-EXECUCAO"
 ```
 
 - Windows
@@ -23,10 +22,11 @@ Configurando as variáveis de ambiente com _Powershell_:
 PS C:\Windows\system32> $env:TOKEN="TOKEN-BOT-FATHER"
 PS C:\Windows\system32> $env:CHAT_ID="ID-CANAL-DESEJADO"
 PS C:\Windows\system32> $env:DEVELOPER_CHAT_ID="ID-CHAT-DO-PERFIL-DEV"
-PS C:\Windows\system32> $env:MODE="MODO-DE-EXECUCAO"
 ```
 
-`MODE` pode ser *"dev"* ou *"deploy"*. O primeiro envia as mensagens para o chat com o desenvolvedor, e o segundo para o chat desejado.
+Obs. 1: caso a variável `DEVELOPER\_CHAT\_ID` receba o valor -1, então as notícias serão enviadas para o chat de ID `CHAT\_ID`.
+
+Obs. 2: o arquivo `last\_message\_pubDate.txt` sempre contém o _pubDate_ da mensagem mais recente do XML do RSS.
 
 - Executando o bot:
 

@@ -8,7 +8,8 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes
+from datetime import datetime
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -52,13 +53,19 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
         logging.info("Analisando XML adquirido...")
         tree = ET.parse(io.BytesIO(req.content))
         root = tree.getroot()
-
-        items = list(reversed([i for i in root.iter('item')]))
-        items_dates = [x.find('pubDate').text for x in items]
-        new_links = [x.find('link').text for x in items]
+        
+        fp = open('last_message_pubDate.txt', 'r')
+        dt = fp.read().replace('\n', '')
+        fp.close()
+        logging.info(f'datetime da mensagem mais recente: {dt}')
+        last_msg_date = datetime.strptime(dt, '%a, %d %b %Y %H:%M:%S %z')
+        
+        items = list(reversed([i for i in root.iter('item')]))  # último elem é o mais recente
+        #items_dates = [x.find('pubDate').text for x in items]
+        new_links = [x.find('link').text for x in items if datetime.strptime(x.find('pubDate').text, '%a, %d %b %Y %H:%M:%S %z') > last_msg_date]
 
         if DEVELOPER_CHAT_ID != '-1':
-            await send_debug_message(context, f"items_dates:{len(items_dates)}\nnews_links:{len(new_links)}")
+            await send_debug_message(context, f"items:{len(items)}\nnews_links:{len(new_links)}")
 
         f_items = list(filter(lambda x: x.find('link').text in new_links, items))
         for node in f_items:
@@ -84,6 +91,10 @@ async def coroutine(context: ContextTypes.DEFAULT_TYPE) -> None:
                                                parse_mode=ParseMode.MARKDOWN)
 
         logging.info("Noticias mais recentes enviadas para o canal com sucesso!")
+        if len(new_links) > 0:
+            fp = open('last_message_pubDate.txt', 'w')
+            fp.write(items[-1].find('pubDate').text)
+            fp.close()
     else:
         logging.error(f"Algo deu errado ao requisitar a url \"{url}\"")
 
@@ -115,15 +126,6 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Bot encerrado.")
 
 
-async def forwarder(update, context) -> None:
-    msg = update.channel_post
-    if msg:
-        logging.info(msg)
-
-
-# TODO: tratar datas no formato '%a, %d %b %Y %H:%M:%S %z'
-# TODO: verificar data da mensagem mais recente e comparar com as mais novas (adquiridas via XML)
-
 def main() -> None:
     logging.info(f'Getting environment vars...')
     logging.info(f'CHAT_ID: {CHAT_ID}')
@@ -133,7 +135,6 @@ def main() -> None:
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('stop', stop))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), forwarder))
     app.add_error_handler(error)
     app.run_polling()
 
